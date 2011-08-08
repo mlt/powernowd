@@ -136,6 +136,7 @@ unsigned int min_limit = 0;
 unsigned int step_specified = 0;
 unsigned int t_per_core = 1;
 unsigned int cores_specified = 0;
+unsigned int max_temp = 100000;
 
 /* statistics */
 unsigned int change_speed_count = 0;
@@ -357,14 +358,21 @@ enum modes inline decide_speed(cpuinfo_t *cpu)
 	pct = ((float)usage)/((float)total);
 	
 	pprintf(4,"PCT = %f\n", pct);
+
+	read_file("/sys/devices/virtual/hwmon/hwmon0/temp1_input", 0, 1);
+	int temp = atoi(buf);
+	sprintf(buf, "temperature x1000 is %d\n", temp);
+	pprintf(6, buf);
 	
 	if ((pct >= ((float)highwater/100.0)) && 
-			(cpu->current_speed != cpu->max_speed)) {
+			(cpu->current_speed != cpu->max_speed)
+	    && (temp < max_temp - 5000)) {
 		/* raise speed to next level */
 		pprintf(6, "got here RAISE\n"); 
 		return RAISE;
 	} else if ((pct <= ((float)lowwater/100.0)) && 
-			(cpu->current_speed != cpu->min_speed)) {
+			(cpu->current_speed != cpu->min_speed)
+		   || (temp > max_temp)) {
 		/* lower speed */
 		pprintf(6, "got here LOWER\n"); 
 		return LOWER;
@@ -954,6 +962,10 @@ int main(int argc, char **argv)
 					cpu->freq_table[j] / 1000);
 		}
 	}
+
+	read_file("/sys/devices/virtual/hwmon/hwmon0/temp1_crit", 0, 1);
+	/* let's define max temperature as 3 degrees below critical */
+	max_temp = atoi(buf)-3000;
 	
 	/* now that everything's all set up, lets set up a exit handler */
 	signal(SIGTERM, terminate);
